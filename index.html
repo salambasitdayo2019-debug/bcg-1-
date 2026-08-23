@@ -205,15 +205,15 @@
   <div class="field">
     <label for="phone">Phone Number</label>
     <input type="tel" id="phone" name="Phone Number" placeholder="+1234567890"
-           inputmode="tel" pattern="\+?[0-9]{7,15}" maxlength="16"
-           title="Enter a valid phone number, e.g. +1234567890" required>
+           inputmode="tel" pattern="(0[0-9]{10}|\+[0-9]{7,15}|[1-9][0-9]{6,14})" maxlength="16"
+           title="Enter a valid number: 11 digits starting with 0, or an international number starting with +" required>
   </div>
 
   <div class="field">
     <label for="whatsapp">WhatsApp Number</label>
     <input type="tel" id="whatsapp" name="WhatsApp Number" placeholder="Your WhatsApp Number"
-           inputmode="numeric" pattern="[0-9]{11}" maxlength="11"
-           title="Enter an 11-digit WhatsApp number">
+           inputmode="tel" pattern="(0[0-9]{10}|\+[0-9]{7,15}|[1-9][0-9]{6,14})" maxlength="16"
+           title="Enter a valid number: 11 digits starting with 0, or an international number starting with +">
   </div>
 
   <div class="field">
@@ -369,8 +369,9 @@
   function sendAbandonedCart() {
     if (orderSubmitted || abandonSent) return;
     if (FORMSPREE_ENDPOINT.includes('YOUR_FORM_ID')) return;
-    // Only counts as an abandoned lead once they've given at least a valid phone + address
-    const phoneOk = phoneEl.value.replace(/\D/g, '').length === 11;
+    // Only counts as an abandoned lead once they've given a validly formatted phone + address
+    const phonePattern = /^(0[0-9]{10}|\+[0-9]{7,15}|[1-9][0-9]{6,14})$/;
+    const phoneOk = phonePattern.test(phoneEl.value.trim());
     const addressOk = addressEl.value.trim().length > 0;
     if (!phoneOk || !addressOk) return;
 
@@ -385,18 +386,23 @@
   });
   window.addEventListener('pagehide', sendAbandonedCart);
 
-  // Phone Number: allow an optional leading "+" for international numbers,
-  // otherwise digits only (max 15 digits, per the international standard).
-  phoneEl.addEventListener('input', () => {
-    const hasPlus = phoneEl.value.trim().startsWith('+');
-    const digits = phoneEl.value.replace(/\D/g, '').slice(0, 15);
-    phoneEl.value = (hasPlus ? '+' : '') + digits;
-  });
-
-  // WhatsApp Number: kept as local 11-digit format (unchanged).
-  document.getElementById('whatsapp').addEventListener('input', (e) => {
-    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 11);
-  });
+  // Phone / WhatsApp Number rules:
+  //  - starts with "0"  -> local format, digits only, capped at 11 digits
+  //  - starts with "+"  -> international format, "+" then up to 15 digits
+  //  - anything else    -> plain digits, up to 15 (e.g. country code with no "+")
+  function sanitizePhoneInput(el) {
+    const raw = el.value;
+    if (raw.trim().startsWith('+')) {
+      const digits = raw.replace(/\D/g, '').slice(0, 15);
+      el.value = '+' + digits;
+    } else if (raw.trim().startsWith('0')) {
+      el.value = raw.replace(/\D/g, '').slice(0, 11);
+    } else {
+      el.value = raw.replace(/\D/g, '').slice(0, 15);
+    }
+  }
+  phoneEl.addEventListener('input', () => sanitizePhoneInput(phoneEl));
+  document.getElementById('whatsapp').addEventListener('input', (e) => sanitizePhoneInput(e.target));
 
   // Highlight the selected offer card
   document.querySelectorAll('.offer').forEach(label => {
